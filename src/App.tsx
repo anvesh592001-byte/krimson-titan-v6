@@ -1075,8 +1075,8 @@ function ChatView(props: {
   const quickPrompts = quickPromptsByMode[props.mode]
 
   return (
-    <motion.section className="grid flex-1 grid-rows-[1fr_auto]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <div ref={props.scrollRef} className="overflow-y-auto px-3 py-5 md:px-6">
+    <motion.section className="grid min-h-0 flex-1 grid-rows-[1fr_auto]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <div ref={props.scrollRef} className="min-h-0 overflow-y-auto px-3 py-5 md:px-6">
         <div className="mx-auto grid max-w-5xl gap-5">
           {props.messages.length === 0 && (
             <div className="grid min-h-[45vh] place-items-center text-center">

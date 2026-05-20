@@ -637,17 +637,31 @@ button {
   }
 
   .glass-composer {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     padding: 7px;
+    align-items: center;
   }
 
   .glass-composer .icon-button,
   .glass-composer .neon-button {
+    flex: 0 0 auto;
     min-width: 38px;
     height: 38px;
     min-height: 38px;
     padding: 0 10px;
+  }
+
+  .glass-composer textarea {
+    order: -1;
+    flex: 0 0 100%;
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+
+  .glass-composer .neon-button {
+    margin-left: auto;
   }
 
   .neon-button {
