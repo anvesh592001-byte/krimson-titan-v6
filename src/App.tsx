@@ -343,7 +343,7 @@ function App() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex min-h-screen flex-1 flex-col">
+        <main className="flex min-h-screen min-w-0 flex-1 flex-col">
           <Topbar
             mode={mode}
             view={view}
@@ -963,18 +963,18 @@ function Topbar(props: {
 
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/45 px-3 py-3 backdrop-blur-2xl md:px-5">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
         <button className="icon-button md:hidden" onClick={props.onMenu} aria-label="Open sidebar">
           <Menu size={18} />
         </button>
-        <div className="mr-auto flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded border border-rose-400/40 bg-rose-500/10 shadow-[0_0_28px_rgba(220,20,60,0.35)]">
+        <div className="mr-auto flex min-w-0 items-center gap-2 md:gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded border border-rose-400/40 bg-rose-500/10 shadow-[0_0_28px_rgba(220,20,60,0.35)]">
             <Cpu className="h-5 w-5 text-rose-300" />
           </div>
-          <div>
-            <p className="font-['Orbitron'] text-sm uppercase tracking-[0.2em] text-white">{modes[props.mode].name}</p>
-            <p className="text-xs text-rose-200">{modes[props.mode].function}</p>
-            <p className="text-xs text-zinc-500">
+          <div className="min-w-0">
+            <p className="truncate font-['Orbitron'] text-sm uppercase tracking-[0.16em] text-white md:tracking-[0.2em]">{modes[props.mode].name}</p>
+            <p className="truncate text-xs text-rose-200">{modes[props.mode].function}</p>
+            <p className="max-w-[52vw] truncate text-xs text-zinc-500 md:max-w-none">
               {props.aiLink.hasKey && props.aiLink.openRouterReachable
                 ? `live AI: ${props.aiLink.model}`
                 : props.aiLink.hasKey
@@ -1137,17 +1137,17 @@ function ChatView(props: {
             <button type="button" className={`icon-button ${props.isListening ? 'active' : ''}`} onClick={props.onMic} title="Voice input">
               <Mic size={18} />
             </button>
-            <button type="button" className="icon-button" onClick={props.onStopVoice} title="Interrupt speech">
-              <CircleStop size={18} />
-            </button>
-            <button type="button" className="icon-button" onClick={() => void props.onRegenerate()} title="Regenerate">
+        <button type="button" className="icon-button hidden sm:inline-grid" onClick={props.onStopVoice} title="Interrupt speech">
+          <CircleStop size={18} />
+        </button>
+            <button type="button" className="icon-button hidden sm:inline-grid" onClick={() => void props.onRegenerate()} title="Regenerate">
               <RefreshCcw size={18} />
             </button>
-            <button type="button" className="icon-button" onClick={() => void props.onShare()} title="Share chat">
+            <button type="button" className="icon-button hidden sm:inline-grid" onClick={() => void props.onShare()} title="Share chat">
               <Share2 size={18} />
             </button>
             <button className="neon-button" type="submit">
-              <Send size={16} /> Send
+              <Send size={16} /> <span className="hidden sm:inline">Send</span>
             </button>
           </form>
         </div>
