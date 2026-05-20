@@ -16,7 +16,17 @@
     <div id="root"></div>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined))
+        window.addEventListener('load', () => {
+          const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+          if (isLocal) {
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+              registrations.forEach((registration) => registration.unregister())
+            })
+            return
+          }
+
+          navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+        })
       }
     </script>
     <script type="module" src="/src/main.tsx"></script>

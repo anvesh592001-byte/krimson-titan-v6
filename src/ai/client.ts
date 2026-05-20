@@ -14,10 +14,44 @@ type OpenRouterMessage = {
 const localResponse = (input: string, mode: ModeId, imageText?: string, error?: string) => {
   const imageLine = imageText ? `\n\nImage channel: ${imageText.slice(0, 180)}` : ''
   const errorLine = error
-    ? `\n\n**Live AI connection failed:** ${error}\n\nYour API key may be fine, but the backend could not complete the OpenRouter request.`
+    ? `\n\nLive AI is not reachable from this browser right now: ${error}`
     : ''
 
-  return `**${modes[mode].name} local fallback active.**\n${errorLine}\n\nFor your request:\n\n> ${input}\n\nTo get real AI responses, run \`npm run server\` from a normal Windows terminal that can access \`openrouter.ai\`.\n\n\`\`\`ts\nconst status = 'KRIMSON TITAN V6 READY'\nconsole.log(status)\n\`\`\`${imageLine}`
+  return `${modes[mode].name} is in offline mode.${errorLine}\n\nYou said: ${input}\n\nStart the AI server, then make a new operation and try again.${imageLine}`
+}
+
+const isLocalBrowser =
+  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+
+const chatEndpoints = isLocalBrowser
+  ? ['http://127.0.0.1:8787/api/chat', '/api/chat']
+  : ['/api/chat']
+
+const fetchTitanChat = async (body: string) => {
+  let lastError = 'AI server did not respond'
+
+  for (const endpoint of chatEndpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: 'OpenRouter request failed' }))
+        lastError = data.error || 'OpenRouter request failed'
+        continue
+      }
+
+      return response.json()
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown connection error'
+    }
+  }
+
+  throw new Error(lastError)
 }
 
 export async function requestTitanResponse(
@@ -50,17 +84,7 @@ export async function requestTitanResponse(
   ]
 
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: payload }),
-    })
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({ error: 'OpenRouter proxy failed' }))
-      throw new Error(data.error || 'OpenRouter proxy failed')
-    }
-    const data = await response.json()
+    const data = await fetchTitanChat(JSON.stringify({ messages: payload }))
     return data.content || localResponse(latest, mode, options.imageName)
   } catch (error) {
     return localResponse(latest, mode, options.imageName, error instanceof Error ? error.message : 'Unknown connection error')
