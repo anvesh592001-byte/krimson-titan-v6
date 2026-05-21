@@ -321,11 +321,11 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen overflow-hidden bg-[#050505] text-white ${settings.compactMode ? 'compact-mode' : ''}`}>
+    <div className={`app-shell min-h-screen overflow-hidden bg-[#050505] text-white ${settings.compactMode ? 'compact-mode' : ''}`}>
       <AmbientSystem mode={mode} particles={settings.particles} animations={settings.animations} />
       <AnimatePresence>{settings.bootSequence && !booted && <BootSequence />}</AnimatePresence>
 
-      <div className="relative z-10 flex min-h-screen">
+      <div className="app-frame relative z-10 flex min-h-screen">
         <Sidebar
           activeId={active?.id}
           conversations={filteredConversations}
@@ -343,7 +343,7 @@ function App() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <main className="app-main flex min-h-screen min-w-0 flex-1 flex-col">
           <Topbar
             mode={mode}
             view={view}
@@ -885,7 +885,7 @@ function Sidebar(props: {
     <>
       <div className={`fixed inset-0 z-30 bg-black/70 md:hidden ${props.open ? 'block' : 'hidden'}`} onClick={props.onClose} />
       <aside
-        className={`sidebar-shell fixed inset-y-0 left-0 z-40 w-[min(360px,90vw)] p-4 transition-transform duration-300 md:static md:translate-x-0 ${
+        className={`sidebar-shell fixed inset-y-0 left-0 z-40 w-[min(360px,90vw)] p-4 transition-transform duration-300 lg:static lg:translate-x-0 ${
           props.open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -894,7 +894,7 @@ function Sidebar(props: {
             <p className="font-['Orbitron'] text-sm uppercase tracking-[0.24em] text-rose-300">Krimson Titan</p>
             <p className="text-xs text-zinc-500">{modes[props.mode].function}</p>
           </div>
-          <button className="icon-button md:hidden" onClick={props.onClose} aria-label="Close sidebar">
+        <button className="icon-button lg:hidden" onClick={props.onClose} aria-label="Close sidebar">
             <ChevronLeft size={18} />
           </button>
         </div>
@@ -964,7 +964,7 @@ function Topbar(props: {
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/45 px-3 py-3 backdrop-blur-2xl md:px-5">
       <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
-        <button className="icon-button md:hidden" onClick={props.onMenu} aria-label="Open sidebar">
+        <button className="icon-button lg:hidden" onClick={props.onMenu} aria-label="Open sidebar">
           <Menu size={18} />
         </button>
         <div className="mr-auto flex min-w-0 items-center gap-2 md:gap-3">
@@ -1075,9 +1075,9 @@ function ChatView(props: {
   const quickPrompts = quickPromptsByMode[props.mode]
 
   return (
-    <motion.section className="grid min-h-0 flex-1 grid-rows-[1fr_auto]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <div ref={props.scrollRef} className="min-h-0 overflow-y-auto px-3 py-5 md:px-6">
-        <div className="mx-auto grid max-w-5xl gap-5">
+    <motion.section className="chat-shell grid min-h-0 flex-1 grid-rows-[1fr_auto]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <div ref={props.scrollRef} className="chat-scroll min-h-0 overflow-y-auto px-3 py-5 md:px-6">
+        <div className="chat-list mx-auto grid max-w-5xl gap-5">
           {props.messages.length === 0 && (
             <div className="grid min-h-[45vh] place-items-center text-center">
               <div>
@@ -1096,8 +1096,8 @@ function ChatView(props: {
         </div>
       </div>
 
-      <div className="border-t border-white/10 bg-black/55 p-3 backdrop-blur-2xl md:p-5">
-        <div className="mx-auto max-w-5xl">
+      <div className="chat-composer-wrap border-t border-white/10 bg-black/55 p-3 backdrop-blur-2xl md:p-5">
+        <div className="chat-composer-inner mx-auto max-w-5xl">
           <div className="mb-3 flex gap-2 overflow-x-auto">
             {quickPrompts.map((prompt) => (
               <button key={prompt} className="quick-chip" onClick={() => void props.onQuick(prompt)}>
