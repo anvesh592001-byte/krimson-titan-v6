@@ -20,6 +20,12 @@ const model = isXai
     : process.env.OPENROUTER_MODEL || 'openrouter/free'
 const apiKey = isXai ? process.env.XAI_API_KEY : isGroq ? process.env.GROQ_API_KEY : process.env.OPENROUTER_API_KEY
 const apiBaseUrl = isXai ? 'https://api.x.ai/v1' : isGroq ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1'
+const hfApiKey = process.env.HF_API_KEY || process.env.HUGGINGFACE_API_KEY
+const hfImageModel = process.env.HF_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell'
+const hfImageEndpoints = [
+  `https://router.huggingface.co/hf-inference/models/${hfImageModel}`,
+  `https://api-inference.huggingface.co/models/${hfImageModel}`,
+]
 const fallbackModels = isXai || isGroq
   ? Array.from(new Set([model]))
   : Array.from(new Set([model, 'openrouter/free', 'qwen/qwen3-coder:free', 'qwen/qwen3-32b:free']))
@@ -59,8 +65,9 @@ app.use('/api', (req, res, next) => {
 })
 
 app.get('/api/health', async (_req, res) => {
-  let openRouterReachable = false
+  let aiReachable = false
   let networkError = ''
+  const providerName = isXai ? 'xAI' : isGroq ? 'GroqCloud' : 'OpenRouter'
 
   try {
     const controller = new AbortController()
@@ -70,15 +77,15 @@ app.get('/api/health', async (_req, res) => {
       signal: controller.signal,
     })
     clearTimeout(timeout)
-    openRouterReachable = response.ok
-    if (!response.ok) networkError = `OpenRouter health check returned ${response.status}`
+    aiReachable = response.ok
+    if (!response.ok) networkError = `${providerName} health check returned ${response.status}`
   } catch (error) {
     networkError =
       error?.cause?.code === 'EACCES'
         ? 'Network blocked for this Node process'
         : error instanceof Error
           ? error.message
-          : 'OpenRouter is unreachable'
+          : `${providerName} is unreachable`
   }
 
   res.json({
@@ -87,7 +94,8 @@ app.get('/api/health', async (_req, res) => {
     model,
     hasKey: Boolean(apiKey),
     accessCodeEnabled: Boolean(publicAccessCode),
-    openRouterReachable,
+    aiReachable,
+    openRouterReachable: aiReachable,
     networkError,
   })
 })
@@ -153,6 +161,76 @@ app.post('/api/chat', async (req, res) => {
           ? error.message
           : 'Unknown server error'
     res.status(500).json({ error: message, code: causeCode })
+  }
+})
+
+app.post('/api/images', async (req, res) => {
+  const prompt = String(req.body.prompt || '').trim()
+
+  if (!prompt) {
+    res.status(400).json({ error: 'Image prompt is required.' })
+    return
+  }
+
+  if (!hfApiKey) {
+    res.status(400).json({ error: 'Add HF_API_KEY to .env to enable image generation.' })
+    return
+  }
+
+  try {
+    const errors = []
+
+    for (const endpoint of hfImageEndpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${hfApiKey}`,
+            'Content-Type': 'application/json',
+            Accept: 'image/png',
+          },
+          body: JSON.stringify({
+            inputs: prompt,
+            parameters: {
+              num_inference_steps: 4,
+              guidance_scale: 0,
+            },
+            options: {
+              wait_for_model: true,
+            },
+          }),
+        })
+
+        const contentType = response.headers.get('content-type') || 'image/png'
+        const buffer = Buffer.from(await response.arrayBuffer())
+
+        if (!response.ok) {
+          errors.push(`${endpoint}: ${buffer.toString('utf8') || response.status}`)
+          continue
+        }
+
+        if (!contentType.startsWith('image/')) {
+          errors.push(`${endpoint}: ${buffer.toString('utf8') || 'Hugging Face did not return an image.'}`)
+          continue
+        }
+
+        res.json({
+          image: `data:${contentType};base64,${buffer.toString('base64')}`,
+          model: hfImageModel,
+          prompt,
+        })
+        return
+      } catch (error) {
+        const code = error?.cause?.code
+        errors.push(`${endpoint}: ${code ? `${code} - ` : ''}${error instanceof Error ? error.message : 'fetch failed'}`)
+      }
+    }
+
+    res.status(502).json({
+      error: `Hugging Face image generation failed. ${errors.join(' | ')}`,
+    })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Image generation failed.' })
   }
 })
 

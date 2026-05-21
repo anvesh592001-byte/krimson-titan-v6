@@ -1,12 +1,14 @@
 /* eslint-disable react-hooks/refs */
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ArrowUp,
   Bot,
   Brain,
   ChevronLeft,
   CircleStop,
   Copy,
   Cpu,
+  Download,
   Eye,
   EyeOff,
   ImagePlus,
@@ -57,7 +59,7 @@ const bootLines = [
   'KRIMSON TITAN V6 kernel handshake',
   'Local memory lattice mounted',
   'Voice bridge listening for browser APIs',
-  'OpenRouter free-model proxy armed',
+  'AI provider bridge armed',
   'Crimson particle grid calibrated',
 ]
 
@@ -89,9 +91,19 @@ type AiLink = {
   checked: boolean
   online: boolean
   hasKey: boolean
+  aiReachable: boolean
   openRouterReachable: boolean
   networkError?: string
   model?: string
+  provider?: string
+}
+
+type GeneratedImage = {
+  id: string
+  prompt: string
+  image: string
+  model?: string
+  createdAt: number
 }
 
 function App() {
@@ -123,10 +135,22 @@ function App() {
   const [isListening, setIsListening] = useState(false)
   const [imagePreview, setImagePreview] = useState<string>()
   const [imageName, setImageName] = useState('')
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
+  const [imageGenerationError, setImageGenerationError] = useState('')
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
+  const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const [authUser, setAuthUser] = useState<AuthUserRecord | null>(() => getSavedAuthUser())
-  const [aiLink, setAiLink] = useState<AiLink>({ checked: false, online: false, hasKey: false, openRouterReachable: false })
+  const [aiLink, setAiLink] = useState<AiLink>({
+    checked: false,
+    online: false,
+    hasKey: false,
+    aiReachable: false,
+    openRouterReachable: false,
+  })
+  const [showBackTop, setShowBackTop] = useState(false)
 
   const filteredConversations = useMemo(
     () =>
@@ -145,26 +169,52 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/health')
-      .then((response) => response.json())
-      .then((data: { ok?: boolean; hasKey?: boolean; openRouterReachable?: boolean; networkError?: string; model?: string }) => {
-        if (!cancelled) {
-          setAiLink({
-            checked: true,
-            online: Boolean(data.ok),
-            hasKey: Boolean(data.hasKey),
-            openRouterReachable: Boolean(data.openRouterReachable),
-            networkError: data.networkError,
-            model: data.model,
-          })
+    const healthEndpoints =
+      ['localhost', '127.0.0.1'].includes(window.location.hostname)
+        ? ['http://127.0.0.1:8787/api/health', '/api/health']
+        : ['/api/health']
+    const loadHealth = async () => {
+      let data: { ok?: boolean; hasKey?: boolean; aiReachable?: boolean; openRouterReachable?: boolean; networkError?: string; model?: string; provider?: string } | undefined
+      for (const endpoint of healthEndpoints) {
+        try {
+          const response = await fetch(endpoint, { cache: 'no-store' })
+          if (response.ok) {
+            data = await response.json()
+            break
+          }
+        } catch {
+          // Try the next health endpoint.
         }
-      })
-      .catch(() => {
-        if (!cancelled) setAiLink({ checked: true, online: false, hasKey: false, openRouterReachable: false })
-      })
+      }
+
+      if (!cancelled && data) {
+        const reachable = Boolean(data.aiReachable ?? data.openRouterReachable)
+        setAiLink({
+          checked: true,
+          online: Boolean(data.ok),
+          hasKey: Boolean(data.hasKey),
+          aiReachable: reachable,
+          openRouterReachable: reachable,
+          networkError: data.networkError,
+          model: data.model,
+          provider: data.provider,
+        })
+      } else if (!cancelled) {
+        setAiLink({ checked: true, online: false, hasKey: false, aiReachable: false, openRouterReachable: false })
+      }
+    }
+
+    void loadHealth()
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    const onScroll = () => setShowBackTop(window.scrollY > 420)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   useEffect(() => {
@@ -390,6 +440,42 @@ function App() {
                 onQuick={submitPrompt}
               />
             )}
+            {view === 'images' && (
+              <ImageStudioView
+                key="images"
+                images={generatedImages}
+                error={imageGenerationError}
+                isGenerating={isGeneratingImage}
+                prompt={imagePrompt}
+                onGenerate={async () => {
+                  const prompt = imagePrompt.trim()
+                  if (!prompt) return
+                  setImageGenerationError('')
+                  setIsGeneratingImage(true)
+                  try {
+                    const data = await requestGeneratedImage(prompt)
+                    const nextImage = {
+                      id: crypto.randomUUID(),
+                      prompt,
+                      image: data.image,
+                      model: data.model,
+                      createdAt: Date.now(),
+                    }
+                    setGeneratedImages((items) => [nextImage, ...items])
+                    remember('Image generation', prompt.slice(0, 80))
+                    setImagePrompt('')
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Unknown image error'
+                    setImageGenerationError(message)
+                    remember('Image generation failed', message.slice(0, 120))
+                  } finally {
+                    setIsGeneratingImage(false)
+                  }
+                }}
+                onPreview={setPreviewImage}
+                onPrompt={setImagePrompt}
+              />
+            )}
             {view === 'terminal' && <TerminalView key="terminal" />}
             {view === 'memory' && <MemoryView key="memory" memories={memories} />}
             {view === 'settings' && (
@@ -406,6 +492,8 @@ function App() {
           </AnimatePresence>
         </main>
       </div>
+      <BackToTop visible={showBackTop || ['images', 'memory', 'terminal', 'settings', 'landing'].includes(view)} />
+      <ImagePreviewModal image={previewImage} onClose={() => setPreviewImage(null)} />
     </div>
   )
 }
@@ -868,6 +956,65 @@ function BootSequence() {
   )
 }
 
+function getProviderLabel(provider?: string) {
+  if (provider === 'groq') return 'GroqCloud'
+  if (provider === 'xai') return 'xAI Grok'
+  if (provider === 'openrouter') return 'OpenRouter'
+  return 'AI'
+}
+
+async function requestGeneratedImage(prompt: string): Promise<{ image: string; model?: string; prompt: string }> {
+  const endpoints = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? ['http://127.0.0.1:8787/api/images', '/api/images']
+    : ['/api/images']
+  let lastError = 'Image generator is unreachable.'
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      const data = await response.json().catch(() => ({ error: 'Image generation failed.' }))
+      if (response.ok && data.image) return data
+      lastError = data.error || 'Image generation failed.'
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Image generation failed.'
+    }
+  }
+
+  throw new Error(lastError)
+}
+
+function BackToTop({ visible }: { visible: boolean }) {
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    document.querySelectorAll<HTMLElement>('.overflow-y-auto, .chat-scroll').forEach((element) => {
+      element.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+  }
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.button
+          aria-label="Back to top"
+          className="back-top-button"
+          initial={{ opacity: 0, y: 18, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.92 }}
+          onClick={scrollToTop}
+          type="button"
+        >
+          <ArrowUp size={20} />
+          <span>Top</span>
+        </motion.button>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function Sidebar(props: {
   activeId?: string
   conversations: ReturnType<typeof useTitanStore.getState>['conversations']
@@ -955,6 +1102,7 @@ function Topbar(props: {
 }) {
   const views: { id: ViewId; icon: typeof Bot; label: string }[] = [
     { id: 'chat', icon: Bot, label: 'Chat' },
+    { id: 'images', icon: ImagePlus, label: 'Images' },
     { id: 'terminal', icon: TerminalSquare, label: 'Terminal' },
     { id: 'memory', icon: Brain, label: 'Memory' },
     { id: 'settings', icon: Settings, label: 'Settings' },
@@ -962,7 +1110,7 @@ function Topbar(props: {
   ]
 
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-black/45 px-3 py-3 backdrop-blur-2xl md:px-5">
+    <header className="titan-navbar sticky top-0 z-30 border-b border-white/10 bg-black/70 px-3 py-3 backdrop-blur-2xl md:px-5">
       <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
         <button className="icon-button lg:hidden" onClick={props.onMenu} aria-label="Open sidebar">
           <Menu size={18} />
@@ -975,11 +1123,11 @@ function Topbar(props: {
             <p className="truncate font-['Orbitron'] text-sm uppercase tracking-[0.16em] text-white md:tracking-[0.2em]">{modes[props.mode].name}</p>
             <p className="truncate text-xs text-rose-200">{modes[props.mode].function}</p>
             <p className="max-w-[52vw] truncate text-xs text-zinc-500 md:max-w-none">
-              {props.aiLink.hasKey && props.aiLink.openRouterReachable
-                ? `live AI: ${props.aiLink.model}`
+              {props.aiLink.hasKey && props.aiLink.aiReachable
+                ? `${getProviderLabel(props.aiLink.provider)}: ${props.aiLink.model}`
                 : props.aiLink.hasKey
-                  ? props.aiLink.networkError || 'key loaded, OpenRouter unreachable'
-                  : 'local simulation until OpenRouter key is added'}
+                  ? props.aiLink.networkError || `${getProviderLabel(props.aiLink.provider)} unreachable`
+                  : 'local simulation until an API key is added'}
             </p>
           </div>
         </div>
@@ -1001,13 +1149,13 @@ function Topbar(props: {
         </button>
         <div
           className={`hidden items-center gap-2 rounded border px-3 py-2 text-xs sm:flex ${
-            props.aiLink.hasKey && props.aiLink.openRouterReachable
+            props.aiLink.hasKey && props.aiLink.aiReachable
               ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
               : 'border-amber-400/30 bg-amber-500/10 text-amber-100'
           }`}
         >
           <Wifi size={14} />
-          {props.aiLink.hasKey && props.aiLink.openRouterReachable ? 'Live AI' : props.aiLink.hasKey ? 'Blocked' : 'Needs key'}
+          {props.aiLink.hasKey && props.aiLink.aiReachable ? 'Live AI' : props.aiLink.hasKey ? 'Blocked' : 'Needs key'}
         </div>
         <div className="hidden items-center gap-2 rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-zinc-300 sm:flex">
           <Lock size={14} className="text-rose-300" />
@@ -1138,8 +1286,8 @@ function ChatView(props: {
               <Mic size={18} />
             </button>
             <button type="button" className="icon-button composer-extra hidden sm:inline-grid" onClick={props.onStopVoice} title="Interrupt speech">
-          <CircleStop size={18} />
-        </button>
+              <CircleStop size={18} />
+            </button>
             <button type="button" className="icon-button composer-extra hidden sm:inline-grid" onClick={() => void props.onRegenerate()} title="Regenerate">
               <RefreshCcw size={18} />
             </button>
@@ -1239,6 +1387,157 @@ function VoiceOrb({ active, mode }: { active: boolean; mode: ModeId }) {
   )
 }
 
+function ImageStudioView({
+  error,
+  images,
+  isGenerating,
+  onGenerate,
+  onPreview,
+  onPrompt,
+  prompt,
+}: {
+  error: string
+  images: GeneratedImage[]
+  isGenerating: boolean
+  onGenerate: () => void | Promise<void>
+  onPreview: (image: GeneratedImage) => void
+  onPrompt: (prompt: string) => void
+  prompt: string
+}) {
+  return (
+    <motion.section className="scroll-section flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-5">
+          <p className="flex items-center gap-2 font-['Orbitron'] text-sm uppercase tracking-[0.28em] text-rose-300">
+            <ImagePlus size={16} /> FLUX image core
+          </p>
+          <h2 className="mt-2 font-['Orbitron'] text-3xl uppercase tracking-[0.12em]">Image generation</h2>
+          <p className="mt-2 max-w-2xl text-sm text-zinc-400">Generate cinematic assets with Hugging Face FLUX, then preview, download, or share them.</p>
+        </div>
+
+        <div className="image-generator-panel">
+          <textarea
+            value={prompt}
+            onChange={(event) => onPrompt(event.target.value)}
+            placeholder="Describe a dark crimson cinematic scene..."
+            rows={3}
+          />
+          <button className="neon-button image-generate-button" disabled={isGenerating || !prompt.trim()} onClick={() => void onGenerate()} type="button">
+            <Sparkles size={18} /> {isGenerating ? 'Generating' : 'Generate'}
+          </button>
+        </div>
+        {error && (
+          <div className="image-error-panel">
+            {error.includes('Failed to fetch') || error.includes('unreachable')
+              ? 'Image server is not running. Start npm run server, then try Generate again.'
+              : error}
+          </div>
+        )}
+
+        {images.length === 0 ? (
+          <div className="image-empty-state">
+            <ImagePlus className="mx-auto mb-4 text-rose-300" size={42} />
+            <p className="font-['Orbitron'] uppercase tracking-[0.18em] text-white">No generated images yet</p>
+            <p className="mt-2 text-sm text-zinc-400">Start with a prompt like “crimson AI temple under rain, cinematic lighting”.</p>
+          </div>
+        ) : (
+          <div className="image-gallery-grid">
+            <AnimatePresence>
+              {images.map((image) => (
+                <motion.article
+                  key={image.id}
+                  className="generated-image-card"
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  layout
+                >
+                  <button className="generated-image-preview" onClick={() => onPreview(image)} type="button">
+                    <img src={image.image} alt={image.prompt} />
+                    <span className="image-card-overlay">
+                      <span className="icon-button" onClick={(event) => {
+                        event.stopPropagation()
+                        void downloadImage(image)
+                      }}>
+                        <Download size={18} />
+                      </span>
+                      <span className="icon-button" onClick={(event) => {
+                        event.stopPropagation()
+                        void shareImage(image)
+                      }}>
+                        <Share2 size={18} />
+                      </span>
+                    </span>
+                  </button>
+                  <div className="p-3">
+                    <p className="line-clamp-2 text-sm text-zinc-200">{image.prompt}</p>
+                    <p className="mt-2 text-xs text-zinc-500">{image.model || 'FLUX'} - {new Date(image.createdAt).toLocaleTimeString()}</p>
+                    <div className="image-card-actions">
+                      <button className="image-action-button" onClick={() => void downloadImage(image)} type="button">
+                        <Download size={16} /> Download
+                      </button>
+                      <button className="image-action-button" onClick={() => void shareImage(image)} type="button">
+                        <Share2 size={16} /> Share
+                      </button>
+                    </div>
+                  </div>
+                </motion.article>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+    </motion.section>
+  )
+}
+
+async function downloadImage(image: GeneratedImage) {
+  const response = await fetch(image.image)
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `krimson-titan-${image.id}.png`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+async function shareImage(image: GeneratedImage) {
+  if (navigator.share) {
+    await navigator.share({ title: 'KRIMSON TITAN image', text: image.prompt }).catch(() => undefined)
+    return
+  }
+  await navigator.clipboard.writeText(image.prompt)
+}
+
+function ImagePreviewModal({ image, onClose }: { image: GeneratedImage | null; onClose: () => void }) {
+  return (
+    <AnimatePresence>
+      {image && (
+        <motion.div className="image-preview-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <button className="absolute inset-0 cursor-default" onClick={onClose} type="button" aria-label="Close image preview" />
+          <motion.div className="image-preview-core" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="min-w-0 truncate font-['Orbitron'] text-sm uppercase tracking-[0.16em] text-rose-200">{image.prompt}</p>
+              <div className="flex shrink-0 items-center gap-2">
+                <button className="icon-button" onClick={() => void downloadImage(image)} type="button" aria-label="Download image">
+                  <Download size={18} />
+                </button>
+                <button className="icon-button" onClick={onClose} type="button" aria-label="Close image preview">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <img src={image.image} alt={image.prompt} />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function TerminalView() {
   const logs = [
     'boot --sequence krimson-v6',
@@ -1250,7 +1549,7 @@ function TerminalView() {
   ]
 
   return (
-    <motion.section className="flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section className="scroll-section flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
       <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[1fr_340px]">
         <div className="terminal-panel min-h-[62vh]">
           <div className="mb-4 flex items-center gap-2 text-rose-300">
@@ -1290,7 +1589,7 @@ function TerminalView() {
 
 function MemoryView({ memories }: { memories: ReturnType<typeof useTitanStore.getState>['memories'] }) {
   return (
-    <motion.section className="flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section className="scroll-section flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
       <div className="mx-auto max-w-6xl">
         <h2 className="font-['Orbitron'] text-3xl uppercase tracking-[0.14em]">Memory lattice</h2>
         <p className="mt-2 text-zinc-400">Persistent localStorage memory, recent activity, and preference traces.</p>
@@ -1322,7 +1621,7 @@ function SettingsView({
   voiceOutput: boolean
 }) {
   return (
-    <motion.section className="flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section className="scroll-section flex-1 overflow-y-auto p-4 md:p-6" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1477,7 +1776,7 @@ function RangeCard({
 
 function LandingView({ aiLink, onStart }: { aiLink: AiLink; onStart: () => void }) {
   return (
-    <motion.section className="flex-1 overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section className="scroll-section flex-1 overflow-y-auto" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
       <div className="mx-auto grid min-h-[calc(100vh-72px)] max-w-7xl content-center gap-10 px-4 py-10 md:px-8 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <p className="font-['Orbitron'] text-sm uppercase tracking-[0.32em] text-rose-300">KRIMSON TITAN V6</p>
@@ -1489,11 +1788,11 @@ function LandingView({ aiLink, onStart }: { aiLink: AiLink; onStart: () => void 
           </p>
           <div className="mt-5 inline-flex rounded border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300">
             AI status:{' '}
-            {aiLink.hasKey && aiLink.openRouterReachable
-              ? `Live on ${aiLink.model}`
+            {aiLink.hasKey && aiLink.aiReachable
+              ? `Live on ${getProviderLabel(aiLink.provider)}: ${aiLink.model}`
               : aiLink.hasKey
-                ? aiLink.networkError || 'OpenRouter unreachable'
-                : 'waiting for OPENROUTER_API_KEY'}
+                ? aiLink.networkError || `${getProviderLabel(aiLink.provider)} unreachable`
+                : 'waiting for an API key'}
           </div>
           <button className="neon-button mt-8" onClick={onStart}>
             <Zap size={18} /> Enter system

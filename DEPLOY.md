@@ -43,6 +43,13 @@ GROQ_MODEL=llama-3.3-70b-versatile
 PORT=8787
 ```
 
+For image generation with Hugging Face FLUX:
+
+```env
+HF_API_KEY=your_huggingface_token
+HF_IMAGE_MODEL=black-forest-labs/FLUX.1-schnell
+```
+
 Optional:
 
 ```env

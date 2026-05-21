@@ -1,5 +1,5 @@
 export type ModeId = 'titan' | 'krimson' | 'oracle' | 'chaos' | 'ghost'
-export type ViewId = 'chat' | 'terminal' | 'memory' | 'settings' | 'landing'
+export type ViewId = 'chat' | 'images' | 'terminal' | 'memory' | 'settings' | 'landing'
 export type Role = 'user' | 'assistant' | 'system'
 
 export type Message = {

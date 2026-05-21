@@ -79,7 +79,7 @@ export const useTitanStore = create<TitanState>()(
       settings: defaultSettings,
       memories: [
         { id: crypto.randomUUID(), label: 'Interface', value: 'Crimson cinematic OS', updatedAt: now },
-        { id: crypto.randomUUID(), label: 'AI provider', value: 'OpenRouter free-model ready', updatedAt: now },
+        { id: crypto.randomUUID(), label: 'AI provider', value: 'Provider bridge ready', updatedAt: now },
       ],
       voiceOutput: false,
       booted: false,

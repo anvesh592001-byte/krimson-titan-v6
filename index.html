@@ -13,7 +13,63 @@
     <title>KRIMSON TITAN V6</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="preload-shell">
+        <div class="preload-core">
+          <div class="preload-orbit"></div>
+          <p>KRIMSON TITAN V6</p>
+          <span>initializing cinematic AI core</span>
+        </div>
+      </div>
+    </div>
+    <style>
+      .preload-shell {
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        color: white;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(220, 20, 60, 0.22), transparent 34%),
+          #050505;
+        font-family: Inter, system-ui, sans-serif;
+      }
+
+      .preload-core {
+        display: grid;
+        gap: 14px;
+        place-items: center;
+        text-align: center;
+      }
+
+      .preload-core p {
+        margin: 0;
+        font: 800 22px Orbitron, system-ui, sans-serif;
+        letter-spacing: 0.22em;
+      }
+
+      .preload-core span {
+        color: #9ca3af;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+
+      .preload-orbit {
+        width: 72px;
+        height: 72px;
+        border: 1px solid rgba(251, 113, 133, 0.35);
+        border-top-color: #fb7185;
+        border-radius: 999px;
+        box-shadow: 0 0 54px rgba(220, 20, 60, 0.45);
+        animation: preloadSpin 1s linear infinite;
+      }
+
+      @keyframes preloadSpin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {

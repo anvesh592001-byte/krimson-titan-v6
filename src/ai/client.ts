@@ -1,7 +1,7 @@
 import { modes } from './modes'
 import type { Message, ModeId } from '../types'
 
-type OpenRouterMessage = {
+type AiMessage = {
   role: 'system' | 'user' | 'assistant'
   content:
     | string
@@ -14,10 +14,10 @@ type OpenRouterMessage = {
 const localResponse = (input: string, mode: ModeId, imageText?: string, error?: string) => {
   const imageLine = imageText ? `\n\nImage channel: ${imageText.slice(0, 180)}` : ''
   const errorLine = error
-    ? `\n\nLive AI is not reachable from this browser right now: ${error}`
+    ? `\n\nLive AI connection issue: ${error}`
     : ''
 
-  return `${modes[mode].name} is in offline mode.${errorLine}\n\nYou said: ${input}\n\nStart the AI server, then make a new operation and try again.${imageLine}`
+  return `${modes[mode].name} is in offline mode.${errorLine}\n\nTry again in a moment, or check that the server is running with the same provider shown in /api/health.${imageLine}\n\nYour message: ${input}`
 }
 
 const isLocalBrowser =
@@ -40,8 +40,8 @@ const fetchTitanChat = async (body: string) => {
       })
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: 'OpenRouter request failed' }))
-        lastError = data.error || 'OpenRouter request failed'
+        const data = await response.json().catch(() => ({ error: 'AI request failed' }))
+        lastError = data.error || 'AI request failed'
         continue
       }
 
@@ -61,7 +61,7 @@ export async function requestTitanResponse(
 ) {
   const latest = messages[messages.length - 1]?.content ?? ''
   const maxContext = options.maxContext ?? 12
-  const payload: OpenRouterMessage[] = [
+  const payload: AiMessage[] = [
     {
       role: 'system',
       content: `${modes[mode].prompt}${options.simpleAnswers ? ' Use simple language and keep the answer short unless the user asks for details.' : ''}`,
@@ -69,7 +69,7 @@ export async function requestTitanResponse(
     ...messages
       .filter((message) => !message.content.includes('local fallback active') && !message.content.includes('Live AI connection failed'))
       .slice(-maxContext)
-      .map((message): OpenRouterMessage => {
+      .map((message): AiMessage => {
         const role = message.role === 'assistant' ? 'assistant' : 'user'
         if (!message.image) return { role, content: message.content }
 
