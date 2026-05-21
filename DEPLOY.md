@@ -19,8 +19,27 @@ npm start
 Required environment variables:
 
 ```env
+AI_PROVIDER=openrouter
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=openrouter/free
+PORT=8787
+```
+
+For Grok/xAI instead:
+
+```env
+AI_PROVIDER=xai
+XAI_API_KEY=your_xai_key
+XAI_MODEL=grok-4.3
+PORT=8787
+```
+
+For GroqCloud instead:
+
+```env
+AI_PROVIDER=groq
+GROQ_API_KEY=your_groqcloud_key
+GROQ_MODEL=llama-3.3-70b-versatile
 PORT=8787
 ```
 

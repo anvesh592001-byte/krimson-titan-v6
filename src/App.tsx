@@ -1134,16 +1134,16 @@ function ChatView(props: {
                 }
               }}
             />
-            <button type="button" className={`icon-button ${props.isListening ? 'active' : ''}`} onClick={props.onMic} title="Voice input">
+            <button type="button" className={`icon-button composer-mic ${props.isListening ? 'active' : ''}`} onClick={props.onMic} title="Voice input">
               <Mic size={18} />
             </button>
-        <button type="button" className="icon-button hidden sm:inline-grid" onClick={props.onStopVoice} title="Interrupt speech">
+            <button type="button" className="icon-button composer-extra hidden sm:inline-grid" onClick={props.onStopVoice} title="Interrupt speech">
           <CircleStop size={18} />
         </button>
-            <button type="button" className="icon-button hidden sm:inline-grid" onClick={() => void props.onRegenerate()} title="Regenerate">
+            <button type="button" className="icon-button composer-extra hidden sm:inline-grid" onClick={() => void props.onRegenerate()} title="Regenerate">
               <RefreshCcw size={18} />
             </button>
-            <button type="button" className="icon-button hidden sm:inline-grid" onClick={() => void props.onShare()} title="Share chat">
+            <button type="button" className="icon-button composer-extra hidden sm:inline-grid" onClick={() => void props.onShare()} title="Share chat">
               <Share2 size={18} />
             </button>
             <button className="neon-button" type="submit">

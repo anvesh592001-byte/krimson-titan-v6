@@ -10,8 +10,19 @@ const app = express()
 const port = process.env.PORT || 8787
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, '..', 'dist')
-const model = process.env.OPENROUTER_MODEL || 'openrouter/free'
-const fallbackModels = Array.from(new Set([model, 'openrouter/free', 'qwen/qwen3-coder:free', 'qwen/qwen3-32b:free']))
+const provider = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : process.env.XAI_API_KEY ? 'xai' : 'openrouter')).toLowerCase()
+const isXai = provider === 'xai' || provider === 'grok'
+const isGroq = provider === 'groq'
+const model = isXai
+  ? process.env.XAI_MODEL || 'grok-4.3'
+  : isGroq
+    ? process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+    : process.env.OPENROUTER_MODEL || 'openrouter/free'
+const apiKey = isXai ? process.env.XAI_API_KEY : isGroq ? process.env.GROQ_API_KEY : process.env.OPENROUTER_API_KEY
+const apiBaseUrl = isXai ? 'https://api.x.ai/v1' : isGroq ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1'
+const fallbackModels = isXai || isGroq
+  ? Array.from(new Set([model]))
+  : Array.from(new Set([model, 'openrouter/free', 'qwen/qwen3-coder:free', 'qwen/qwen3-32b:free']))
 const visionModels = ['qwen/qwen2.5-vl-72b-instruct:free', 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.2-11b-vision-instruct:free']
 const publicAccessCode = process.env.PUBLIC_ACCESS_CODE?.trim()
 const requestLog = new Map()
@@ -54,7 +65,10 @@ app.get('/api/health', async (_req, res) => {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 4500)
-    const response = await fetch('https://openrouter.ai/api/v1/models', { signal: controller.signal })
+    const response = await fetch(`${apiBaseUrl}/models`, {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      signal: controller.signal,
+    })
     clearTimeout(timeout)
     openRouterReachable = response.ok
     if (!response.ok) networkError = `OpenRouter health check returned ${response.status}`
@@ -69,8 +83,9 @@ app.get('/api/health', async (_req, res) => {
 
   res.json({
     ok: true,
+    provider: isXai ? 'xai' : isGroq ? 'groq' : 'openrouter',
     model,
-    hasKey: Boolean(process.env.OPENROUTER_API_KEY),
+    hasKey: Boolean(apiKey),
     accessCodeEnabled: Boolean(publicAccessCode),
     openRouterReachable,
     networkError,
@@ -78,13 +93,11 @@ app.get('/api/health', async (_req, res) => {
 })
 
 app.post('/api/chat', async (req, res) => {
-  const apiKey = process.env.OPENROUTER_API_KEY
-
   if (!apiKey) {
     res.json({
       fallback: true,
       content:
-        'Local simulation active. Add OPENROUTER_API_KEY to .env and run npm run server for live free-model responses.',
+        `Local simulation active. Add ${isXai ? 'XAI_API_KEY' : isGroq ? 'GROQ_API_KEY' : 'OPENROUTER_API_KEY'} to .env and run npm run server for live AI responses.`,
     })
     return
   }
@@ -92,16 +105,18 @@ app.post('/api/chat', async (req, res) => {
   try {
     const errors = []
     const hasImage = JSON.stringify(req.body.messages || []).includes('"image_url"')
-    const modelCandidates = hasImage ? Array.from(new Set([...visionModels, ...fallbackModels])) : fallbackModels
+    const modelCandidates = hasImage && !isXai && !isGroq ? Array.from(new Set([...visionModels, ...fallbackModels])) : fallbackModels
 
     for (const candidateModel of modelCandidates) {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(`${apiBaseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:5173',
-          'X-Title': 'KRIMSON TITAN V6',
+          ...(!isXai && !isGroq && {
+            'HTTP-Referer': 'http://localhost:5173',
+            'X-Title': 'KRIMSON TITAN V6',
+          }),
         },
         body: JSON.stringify({
           model: candidateModel,
@@ -128,12 +143,12 @@ app.post('/api/chat', async (req, res) => {
       errors.push(`${candidateModel}: empty response`)
     }
 
-    res.status(502).json({ error: `No OpenRouter model returned content. ${errors.join(' | ')}` })
+    res.status(502).json({ error: `No ${isXai ? 'Grok' : isGroq ? 'Groq' : 'OpenRouter'} model returned content. ${errors.join(' | ')}` })
   } catch (error) {
     const causeCode = error?.cause?.code
     const message =
       causeCode === 'EACCES'
-        ? 'Network access is blocked for this Node process. Run npm run server from your normal Windows terminal, or allow outbound access to openrouter.ai.'
+        ? `Network access is blocked for this Node process. Run npm run server from your normal Windows terminal, or allow outbound access to ${isXai ? 'api.x.ai' : isGroq ? 'api.groq.com' : 'openrouter.ai'}.`
         : error instanceof Error
           ? error.message
           : 'Unknown server error'
