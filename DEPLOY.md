@@ -25,6 +25,15 @@ OPENROUTER_MODEL=openrouter/free
 PORT=8787
 ```
 
+For Gemini instead (free tier available via Google AI Studio):
+
+```env
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key
+GEMINI_MODEL=gemini-2.5-flash
+PORT=8787
+```
+
 For Grok/xAI instead:
 
 ```env
